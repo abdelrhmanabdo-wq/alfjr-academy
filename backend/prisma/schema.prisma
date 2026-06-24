@@ -1,0 +1,316 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  HEAD_SUPERVISOR
+  SUPERVISOR
+  TEACHER
+  PARENT
+}
+
+enum SessionStatus {
+  ATTENDED
+  STUDENT_ABSENT_EXCUSED
+  STUDENT_ABSENT_UNEXCUSED
+  TEACHER_ABSENT
+  COMPENSATION
+}
+
+enum SessionType {
+  REGULAR
+  TRIAL
+}
+
+enum BilledTo {
+  PARENT
+  ACADEMY
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  PARTIALLY_PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PAYPAL
+  BANK_TRANSFER
+  CASH
+  OTHER
+}
+
+enum PayoutStatus {
+  CALCULATED
+  PAID
+  PARTIALLY_PAID
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  TRIAL_SCHEDULED
+  TRIAL_DONE
+  CONVERTED
+  LOST
+}
+
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String
+  role       Role
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  teacher    Teacher?
+  supervisor Supervisor?
+  parent     Parent?
+}
+
+model Supervisor {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  name      String
+  isHead    Boolean   @default(false)
+  status    Boolean   @default(true)
+  notes     String?
+  teachers  Teacher[]
+  createdAt DateTime  @default(now())
+}
+
+model Teacher {
+  id           String     @id @default(cuid())
+  userId       String     @unique
+  user         User       @relation(fields: [userId], references: [id])
+  name         String
+  defaultRate  Float
+  rateCurrency String     @default("USD")
+  status       Boolean    @default(true)
+  notes        String?
+  supervisorId String?
+  supervisor   Supervisor? @relation(fields: [supervisorId], references: [id])
+  assignments  StudentTeacherAssignment[]
+  sessions     Session[]
+  payrolls     TeacherPayroll[]
+  createdAt    DateTime   @default(now())
+}
+
+model Parent {
+  id                String   @id @default(cuid())
+  userId            String?  @unique
+  user              User?    @relation(fields: [userId], references: [id])
+  name              String
+  phone             String?
+  whatsapp          String?
+  email             String?
+  preferredCurrency String   @default("USD")
+  paymentMethod     String?
+  status            Boolean  @default(true)
+  students          Student[]
+  invoices          Invoice[]
+  createdAt         DateTime @default(now())
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  name        String
+  parentId    String
+  parent      Parent   @relation(fields: [parentId], references: [id])
+  status      Boolean  @default(true)
+  level       String?
+  notes       String?
+  assignments StudentTeacherAssignment[]
+  sessions    Session[]
+  invoiceItems InvoiceItem[]
+  createdAt   DateTime @default(now())
+}
+
+model StudentTeacherAssignment {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id])
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+  studentRate Float
+  teacherRate Float
+  currency    String   @default("USD")
+  isActive    Boolean  @default(true)
+  startDate   DateTime @default(now())
+  sessions    Session[]
+  createdAt   DateTime @default(now())
+}
+
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  month     Int
+  year      Int
+  usdToEgp  Float
+  createdAt DateTime @default(now())
+
+  @@unique([month, year])
+}
+
+model Session {
+  id              String        @id @default(cuid())
+  date            DateTime
+  teacherId       String
+  teacher         Teacher       @relation(fields: [teacherId], references: [id])
+  studentId       String
+  student         Student       @relation(fields: [studentId], references: [id])
+  assignmentId    String?
+  assignment      StudentTeacherAssignment? @relation(fields: [assignmentId], references: [id])
+  duration        Int
+  status          SessionStatus
+  type            SessionType   @default(REGULAR)
+  billedTo        BilledTo      @default(PARENT)
+  notes           String?
+  studentRate     Float?
+  teacherRate     Float?
+  compensationFor String?
+  recordedBy      String?
+  invoiceItems    InvoiceItem[]
+  payrollItems    PayrollItem[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  parentId      String
+  parent        Parent        @relation(fields: [parentId], references: [id])
+  periodFrom    DateTime
+  periodTo      DateTime
+  currency      String
+  subtotal      Float
+  paypalFee     Float         @default(0)
+  total         Float
+  totalEgp      Float?
+  status        InvoiceStatus @default(DRAFT)
+  notes         String?
+  items         InvoiceItem[]
+  payments      Payment[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id])
+  sessionId   String?
+  session     Session? @relation(fields: [sessionId], references: [id])
+  description String
+  hours       Float
+  rate        Float
+  amount      Float
+  createdAt   DateTime @default(now())
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  invoiceId    String
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id])
+  amount       Float
+  currency     String
+  amountEgp    Float?
+  method       PaymentMethod
+  reference    String?
+  paidAt       DateTime
+  exchangeRate Float?
+  notes        String?
+  createdAt    DateTime      @default(now())
+}
+
+model TeacherPayroll {
+  id          String       @id @default(cuid())
+  teacherId   String
+  teacher     Teacher      @relation(fields: [teacherId], references: [id])
+  month       Int
+  year        Int
+  totalHours  Float
+  rate        Float
+  currency    String
+  totalAmount Float
+  totalEgp    Float?
+  status      PayoutStatus @default(CALCULATED)
+  paidAt      DateTime?
+  notes       String?
+  items       PayrollItem[]
+  createdAt   DateTime     @default(now())
+
+  @@unique([teacherId, month, year])
+}
+
+model PayrollItem {
+  id        String         @id @default(cuid())
+  payrollId String
+  payroll   TeacherPayroll @relation(fields: [payrollId], references: [id])
+  sessionId String
+  session   Session        @relation(fields: [sessionId], references: [id])
+  hours     Float
+  rate      Float
+  amount    Float
+  createdAt DateTime       @default(now())
+}
+
+model Lead {
+  id          String       @id @default(cuid())
+  name        String
+  phone       String?
+  whatsapp    String?
+  email       String?
+  source      String?
+  status      LeadStatus   @default(NEW)
+  notes       String?
+  assignedTo  String?
+  convertedAt DateTime?
+  children    LeadChild[]
+  activities  LeadActivity[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model LeadChild {
+  id     String  @id @default(cuid())
+  leadId String
+  lead   Lead    @relation(fields: [leadId], references: [id])
+  name   String
+  age    Int?
+  level  String?
+}
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id])
+  type      String
+  notes     String?
+  createdAt DateTime @default(now())
+  createdBy String?
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+}
