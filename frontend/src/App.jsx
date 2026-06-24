@@ -9,12 +9,10 @@ import arEG from 'antd/locale/ar_EG'
 import '@refinedev/antd/dist/reset.css'
 
 import { TeacherList, TeacherCreate, TeacherEdit, TeacherShow } from './pages/teachers'
-import { StudentList, StudentCreate, StudentEdit, StudentShow } from './pages/students'
-import { SessionList, SessionCreate, SessionEdit, SessionShow } from './pages/sessions'
-import { PaymentList, PaymentCreate, PaymentEdit } from './pages/payments'
-import { InvoiceList, InvoiceCreate, InvoiceShow } from './pages/invoices'
-import { PayrollList, PayrollCreate } from './pages/payroll'
-import { Dashboard } from './pages/dashboard'
+import { StudentList, StudentCreate, StudentEdit } from './pages/students'
+import { SessionList, SessionCreate, SessionEdit } from './pages/sessions'
+import { InvoiceList, InvoiceCreate, InvoiceEdit } from './pages/invoices'
+import { PayrollList, PayrollCreate, PayrollEdit } from './pages/payroll'
 import { authProvider } from './authProvider'
 
 const supabaseClient = createClient(
@@ -39,7 +37,6 @@ export default function App() {
                 list: '/teachers',
                 create: '/teachers/create',
                 edit: '/teachers/edit/:id',
-                show: '/teachers/show/:id',
                 meta: { label: 'المعلمون', icon: '👨‍🏫' }
               },
               {
@@ -47,7 +44,6 @@ export default function App() {
                 list: '/students',
                 create: '/students/create',
                 edit: '/students/edit/:id',
-                show: '/students/show/:id',
                 meta: { label: 'الطلاب', icon: '👩‍🎓' }
               },
               {
@@ -55,44 +51,40 @@ export default function App() {
                 list: '/sessions',
                 create: '/sessions/create',
                 edit: '/sessions/edit/:id',
-                show: '/sessions/show/:id',
-                meta: { label: 'الجلسات', icon: '📅' }
-              },
-              {
-                name: 'payments',
-                list: '/payments',
-                create: '/payments/create',
-                edit: '/payments/edit/:id',
-                meta: { label: 'المدفوعات', icon: '💰' }
+                meta: { label: 'الحصص', icon: '📅' }
               },
               {
                 name: 'invoices',
                 list: '/invoices',
                 create: '/invoices/create',
-                show: '/invoices/show/:id',
-                meta: { label: 'الفواتير', icon: '🧾' }
+                edit: '/invoices/edit/:id',
+                meta: { label: 'الفواتير', icon: '💵' }
               },
               {
                 name: 'payroll',
                 list: '/payroll',
                 create: '/payroll/create',
-                meta: { label: 'رواتب المعلمين', icon: '💳' }
-              },
+                edit: '/payroll/edit/:id',
+                meta: { label: 'الرواتب', icon: '💰' }
+              }
             ]}
-            options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}
+            options={{
+              syncWithLocation: true,
+              warnWhenUnsavedChanges: true,
+              useNewQueryKeys: true,
+            }}
           >
             <Routes>
               <Route
                 element={
-                  <Authenticated key="authenticated-inner" fallback={<CatchAllNavigate to="/login" />}>
-                    <ThemedLayoutV2 Sider={() => <ThemedSiderV2 Title={() => <span style={{fontWeight:'bold',fontSize:16}}>أكاديمية الفجر</span>} />}>
+                  <Authenticated fallback={<CatchAllNavigate to="/login" />}>
+                    <ThemedLayoutV2 Sider={() => <ThemedSiderV2 />}>
                       <Outlet />
                     </ThemedLayoutV2>
                   </Authenticated>
                 }
               >
                 <Route index element={<NavigateToResource resource="teachers" />} />
-                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/teachers">
                   <Route index element={<TeacherList />} />
                   <Route path="create" element={<TeacherCreate />} />
@@ -103,39 +95,34 @@ export default function App() {
                   <Route index element={<StudentList />} />
                   <Route path="create" element={<StudentCreate />} />
                   <Route path="edit/:id" element={<StudentEdit />} />
-                  <Route path="show/:id" element={<StudentShow />} />
                 </Route>
                 <Route path="/sessions">
                   <Route index element={<SessionList />} />
                   <Route path="create" element={<SessionCreate />} />
                   <Route path="edit/:id" element={<SessionEdit />} />
-                  <Route path="show/:id" element={<SessionShow />} />
-                </Route>
-                <Route path="/payments">
-                  <Route index element={<PaymentList />} />
-                  <Route path="create" element={<PaymentCreate />} />
-                  <Route path="edit/:id" element={<PaymentEdit />} />
                 </Route>
                 <Route path="/invoices">
                   <Route index element={<InvoiceList />} />
                   <Route path="create" element={<InvoiceCreate />} />
-                  <Route path="show/:id" element={<InvoiceShow />} />
+                  <Route path="edit/:id" element={<InvoiceEdit />} />
                 </Route>
                 <Route path="/payroll">
                   <Route index element={<PayrollList />} />
                   <Route path="create" element={<PayrollCreate />} />
+                  <Route path="edit/:id" element={<PayrollEdit />} />
                 </Route>
+                <Route path="*" element={<ErrorComponent />} />
               </Route>
               <Route
                 element={
-                  <Authenticated key="authenticated-outer" fallback={<Outlet />}>
+                  <Authenticated fallback={<Outlet />}>
                     <NavigateToResource />
                   </Authenticated>
                 }
               >
-                <Route path="/login" element={<AuthPage type="login" title={<div style={{textAlign:'center',padding:'16px 0'}}><h2 style={{color:'#1677ff',margin:0}}>أكاديمية الفجر</h2><p style={{color:'#888',margin:'4px 0 0'}}>دخول لوحة التحكم</p></div>} />} />
+                <Route path="/login" element={<AuthPage type="login" />} />
+                <Route path="/register" element={<AuthPage type="register" />} />
               </Route>
-              <Route path="*" element={<ErrorComponent />} />
             </Routes>
             <UnsavedChangesNotifier />
             <DocumentTitleHandler />
