@@ -1,40 +1,61 @@
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { createClient } = require('@supabase/supabase-js');
 
-const auth = async (req, res, next) => {
+// Auth middleware - verifies JWT token
+const requireAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'No token provided' });
     }
+
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, email: true, role: true, isActive: true }
-    });
-    if (!user || !user.isActive) {
-      return res.status(401).json({ error: 'Unauthorized' });
+
+    // Verify token using Supabase service client
+    const supabase = req.app.get('supabase');
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
-    req.user = user;
+
+    // Get user profile from our users table
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('id, email, full_name, role, is_active')
+      .eq('email', user.email)
+      .single();
+
+    if (!userProfile || !userProfile.is_active) {
+      return res.status(401).json({ error: 'User not found or inactive' });
+    }
+
+    req.user = userProfile;
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    console.error('Auth middleware error:', err);
+    res.status(401).json({ error: 'Authentication failed' });
   }
 };
 
-const requireRole = (...roles) => (req, res, next) => {
-  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
-  if (!roles.includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
-  next();
+// Admin-only middleware
+const requireAdmin = async (req, res, next) => {
+  await requireAuth(req, res, async () => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+  });
 };
 
-module.exports = {
-  auth,
-  requireRole,
-  isAdmin: requireRole('ADMIN'),
-  isAdminOrHead: requireRole('ADMIN', 'HEAD_SUPERVISOR'),
-  isAdminOrSupervisor: requireRole('ADMIN', 'HEAD_SUPERVISOR', 'SUPERVISOR'),
-  isStaff: requireRole('ADMIN', 'HEAD_SUPERVISOR', 'SUPERVISOR', 'TEACHER')
+// Teacher or admin middleware
+const requireTeacher = async (req, res, next) => {
+  await requireAuth(req, res, async () => {
+    if (!['admin', 'teacher'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Teacher access required' });
+    }
+    next();
+  });
 };
+
+module.exports = { requireAuth, requireAdmin, requireTeacher };
