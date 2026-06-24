@@ -1,4 +1,4 @@
-name: Deploy Frontend to Netlify
+name: Deploy to Netlify
 
 on:
   push:
@@ -9,42 +9,34 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-
-      - name: Install Netlify CLI
-        run: npm install -g netlify-cli
-
-      - name: Install frontend dependencies
+          
+      - name: Install dependencies
         working-directory: ./frontend
-        run: npm install
-
-      - name: Build frontend
+        run: npm ci
+        
+      - name: Build
         working-directory: ./frontend
         run: npm run build
         env:
-          VITE_API_URL: https://alfjr-academy-production.up.railway.app
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-
-      - name: Create Netlify site and deploy
-        run: |
-          # Create site via API
-          SITE_JSON=$(curl -s -X POST https://api.netlify.com/api/v1/sites \
-            -H "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"name":"alfjr-academy-app","account_slug":"abdelrhmann-mmohamed"}')
-          SITE_ID=$(echo $SITE_JSON | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || echo "")
-          echo "Site ID: $SITE_ID"
-          # Deploy
-          netlify deploy --prod \
-            --dir=frontend/dist \
-            --auth=$NETLIFY_AUTH_TOKEN \
-            --site=$SITE_ID
+          
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v2.1
+        with:
+          publish-dir: './frontend/dist'
+          production-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: 'Deploy from GitHub Actions'
+          enable-pull-request-comment: false
+          enable-commit-comment: false
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        timeout-minutes: 1
