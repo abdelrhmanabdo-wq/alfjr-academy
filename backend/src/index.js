@@ -1,10 +1,18 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const { createClient } = require('@supabase/supabase-js');
+
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Supabase client (service role for admin operations)
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 // Middleware
 app.use(cors({
@@ -14,41 +22,48 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date(), app: 'Alfjr Academy API' });
-});
+// Make supabase available in routes
+app.set('supabase', supabase);
 
 // Routes
-app.use('/api/auth',           require('./routes/auth'));
-app.use('/api/dashboard',      require('./routes/dashboard'));
-app.use('/api/parents',        require('./routes/parents'));
-app.use('/api/students',       require('./routes/students'));
-app.use('/api/teachers',       require('./routes/teachers'));
-app.use('/api/supervisors',    require('./routes/supervisors'));
-app.use('/api/assignments',    require('./routes/assignments'));
-app.use('/api/sessions',       require('./routes/sessions'));
-app.use('/api/invoices',       require('./routes/invoices'));
-app.use('/api/payments',       require('./routes/payments'));
-app.use('/api/payroll',        require('./routes/payroll'));
-app.use('/api/exchange-rates', require('./routes/exchangeRates'));
-app.use('/api/leads',          require('./routes/leads'));
-app.use('/api/notifications',  require('./routes/notifications'));
-app.use('/api/reports',        require('./routes/reports'));
+const authRoutes = require('./routes/auth');
+const teachersRoutes = require('./routes/teachers');
+const studentsRoutes = require('./routes/students');
+const sessionsRoutes = require('./routes/sessions');
+const paymentsRoutes = require('./routes/payments');
+const dashboardRoutes = require('./routes/dashboard');
+
+app.use('/api/auth', authRoutes);
+app.use('/api/teachers', teachersRoutes);
+app.use('/api/students', studentsRoutes);
+app.use('/api/sessions', sessionsRoutes);
+app.use('/api/payments', paymentsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    service: 'Alfjr Academy API',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // 404 handler
-app.use((req, res) => {
+app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Error handler
+// Global error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error' });
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error'
+  });
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Alfjr Academy API running on port ${PORT}`);
+  console.log(`Alfjr Academy API running on port ${PORT}`);
 });
 
 module.exports = app;
