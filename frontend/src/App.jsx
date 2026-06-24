@@ -1,191 +1,147 @@
-import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
-import { createContext, useContext, useState, useEffect } from 'react'
+import { Refine, Authenticated } from '@refinedev/core'
+import { dataProvider, liveProvider } from '@refinedev/supabase'
+import { AuthPage, ErrorComponent, ThemedLayoutV2, ThemedSiderV2, useNotificationProvider } from '@refinedev/antd'
+import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom'
+import routerBindings, { CatchAllNavigate, DocumentTitleHandler, NavigateToResource, UnsavedChangesNotifier } from '@refinedev/react-router-v6'
 import { createClient } from '@supabase/supabase-js'
+import { App as AntdApp, ConfigProvider } from 'antd'
+import arEG from 'antd/locale/ar_EG'
+import '@refinedev/antd/dist/reset.css'
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || '',
-  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+import { TeacherList, TeacherCreate, TeacherEdit, TeacherShow } from './pages/teachers'
+import { StudentList, StudentCreate, StudentEdit, StudentShow } from './pages/students'
+import { SessionList, SessionCreate, SessionEdit, SessionShow } from './pages/sessions'
+import { PaymentList, PaymentCreate, PaymentEdit } from './pages/payments'
+import { InvoiceList, InvoiceCreate, InvoiceShow } from './pages/invoices'
+import { PayrollList, PayrollCreate } from './pages/payroll'
+import { Dashboard } from './pages/dashboard'
+import { authProvider } from './authProvider'
+
+const supabaseClient = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
 )
-
-const AuthContext = createContext(null)
-
-function useAuth() {
-  return useContext(AuthContext)
-}
-
-function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
-
-  const signIn = async (email, password) => {
-    return supabase.auth.signInWithPassword({ email, password })
-  }
-
-  const signOut = async () => {
-    return supabase.auth.signOut()
-  }
-
-  return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  )
-}
-
-function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
-  if (loading) return <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh'}}>Loading...</div>
-  if (!user) return <Navigate to="/login" replace />
-  return children
-}
-
-function LoginPage() {
-  const { signIn } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    const { error } = await signIn(email, password)
-    if (error) setError(error.message)
-    setLoading(false)
-  }
-
-  return (
-    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f0f4f8'}}>
-      <div style={{background:'white',padding:'40px',borderRadius:'12px',boxShadow:'0 4px 20px rgba(0,0,0,0.1)',width:'100%',maxWidth:'400px'}}>
-        <h1 style={{textAlign:'center',marginBottom:'8px',color:'#1a73e8'}}>Alfjr Academy</h1>
-        <p style={{textAlign:'center',color:'#666',marginBottom:'32px'}}>أكاديمية الفجر للتعليم</p>
-        {error && <div style={{background:'#fdecea',color:'#c62828',padding:'12px',borderRadius:'8px',marginBottom:'16px'}}>{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <div style={{marginBottom:'16px'}}>
-            <label style={{display:'block',marginBottom:'6px',fontWeight:'600'}}>البريد الإلكتروني</label>
-            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required style={{width:'100%',padding:'10px 14px',border:'1px solid #dadce0',borderRadius:'8px',fontSize:'14px',boxSizing:'border-box'}} placeholder="example@email.com" />
-          </div>
-          <div style={{marginBottom:'24px'}}>
-            <label style={{display:'block',marginBottom:'6px',fontWeight:'600'}}>كلمة المرور</label>
-            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required style={{width:'100%',padding:'10px 14px',border:'1px solid #dadce0',borderRadius:'8px',fontSize:'14px',boxSizing:'border-box'}} />
-          </div>
-          <button type="submit" disabled={loading} style={{width:'100%',padding:'12px',background:'#1a73e8',color:'white',border:'none',borderRadius:'8px',fontSize:'16px',fontWeight:'600',cursor:'pointer'}}>
-            {loading ? 'جارٍ تسجيل الدخول...' : 'تسجيل الدخول'}
-          </button>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-const navItems = [
-  { path: '/dashboard', label: 'لوحة التحكم', icon: '🏠' },
-  { path: '/teachers', label: 'المعلمون', icon: '👨‍🏫' },
-  { path: '/students', label: 'الطلاب', icon: '👩‍🎓' },
-  { path: '/parents', label: 'أولياء الأمور', icon: '👪' },
-  { path: '/sessions', label: 'الجلسات', icon: '📅' },
-  { path: '/invoices', label: 'الفواتير', icon: '🧾' },
-  { path: '/payments', label: 'المدفوعات', icon: '💰' },
-  { path: '/payroll', label: 'الرواتب', icon: '💳' },
-  { path: '/reports', label: 'التقارير', icon: '📊' },
-]
-
-function Sidebar({ onSignOut }) {
-  const location = useLocation()
-  return (
-    <div style={{width:'240px',background:'#1a73e8',minHeight:'100vh',display:'flex',flexDirection:'column',color:'white'}}>
-      <div style={{padding:'24px 20px',borderBottom:'1px solid rgba(255,255,255,0.2)'}}>
-        <h2 style={{margin:0,fontSize:'18px'}}>Alfjr Academy</h2>
-        <p style={{margin:'4px 0 0',opacity:0.8,fontSize:'12px'}}>أكاديمية الفجر</p>
-      </div>
-      <nav style={{flex:1,padding:'16px 0'}}>
-        {navItems.map(item => (
-          <Link key={item.path} to={item.path} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 20px',color:'white',textDecoration:'none',background:location.pathname.startsWith(item.path)?'rgba(255,255,255,0.2)':'transparent',borderLeft:location.pathname.startsWith(item.path)?'3px solid white':'3px solid transparent'}}>
-            <span>{item.icon}</span>
-            <span style={{fontSize:'14px'}}>{item.label}</span>
-          </Link>
-        ))}
-      </nav>
-      <div style={{padding:'16px 20px',borderTop:'1px solid rgba(255,255,255,0.2)'}}>
-        <button onClick={onSignOut} style={{background:'rgba(255,255,255,0.1)',color:'white',border:'1px solid rgba(255,255,255,0.3)',padding:'8px 16px',borderRadius:'8px',cursor:'pointer',width:'100%'}}>تسجيل الخروج</button>
-      </div>
-    </div>
-  )
-}
-
-function PlaceholderPage({ title }) {
-  return (
-    <div style={{padding:'32px'}}>
-      <h1 style={{color:'#1a73e8',marginBottom:'16px'}}>{title}</h1>
-      <div style={{background:'white',borderRadius:'12px',padding:'32px',boxShadow:'0 1px 3px rgba(0,0,0,0.1)',textAlign:'center',color:'#666'}}>
-        <p style={{fontSize:'48px',marginBottom:'16px'}}>🚧</p>
-        <p>هذه الصفحة قيد التطوير</p>
-      </div>
-    </div>
-  )
-}
-
-function Dashboard() {
-  const { user } = useAuth()
-  return (
-    <div style={{padding:'32px'}}>
-      <h1 style={{color:'#1a73e8',marginBottom:'8px'}}>لوحة التحكم</h1>
-      <p style={{color:'#666',marginBottom:'32px'}}>مرحباً، {user?.email}</p>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:'16px'}}>
-        {[{title:'المعلمون',icon:'👨‍🏫',color:'#1a73e8'},{title:'الطلاب',icon:'👩‍🎓',color:'#34a853'},{title:'الجلسات',icon:'📅',color:'#fbbc04'},{title:'الإيرادات',icon:'💰',color:'#ea4335'}].map(card=>(
-          <div key={card.title} style={{background:'white',borderRadius:'12px',padding:'24px',boxShadow:'0 1px 3px rgba(0,0,0,0.1)',borderTop:`4px solid ${card.color}`}}>
-            <div style={{fontSize:'32px',marginBottom:'8px'}}>{card.icon}</div>
-            <div style={{fontSize:'24px',fontWeight:'700',color:card.color}}>0</div>
-            <div style={{color:'#666',fontSize:'14px'}}>{card.title}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function Layout() {
-  const { signOut } = useAuth()
-  return (
-    <div style={{display:'flex',minHeight:'100vh'}}>
-      <Sidebar onSignOut={signOut} />
-      <main style={{flex:1,background:'#f8f9fa',overflow:'auto'}}>
-        <Routes>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/teachers" element={<PlaceholderPage title="المعلمون" />} />
-          <Route path="/students" element={<PlaceholderPage title="الطلاب" />} />
-          <Route path="/parents" element={<PlaceholderPage title="أولياء الأمور" />} />
-          <Route path="/sessions" element={<PlaceholderPage title="الجلسات" />} />
-          <Route path="/invoices" element={<PlaceholderPage title="الفواتير" />} />
-          <Route path="/payments" element={<PlaceholderPage title="المدفوعات" />} />
-          <Route path="/payroll" element={<PlaceholderPage title="الرواتب" />} />
-          <Route path="/reports" element={<PlaceholderPage title="التقارير" />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </main>
-    </div>
-  )
-}
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/*" element={<ProtectedRoute><Layout /></ProtectedRoute>} />
-      </Routes>
-    </AuthProvider>
+    <BrowserRouter>
+      <ConfigProvider locale={arEG} direction="rtl" theme={{ token: { colorPrimary: '#1677ff' } }}>
+        <AntdApp>
+          <Refine
+            dataProvider={dataProvider(supabaseClient)}
+            liveProvider={liveProvider(supabaseClient)}
+            authProvider={authProvider(supabaseClient)}
+            routerProvider={routerBindings}
+            notificationProvider={useNotificationProvider}
+            resources={[
+              {
+                name: 'teachers',
+                list: '/teachers',
+                create: '/teachers/create',
+                edit: '/teachers/edit/:id',
+                show: '/teachers/show/:id',
+                meta: { label: 'المعلمون', icon: '👨‍🏫' }
+              },
+              {
+                name: 'students',
+                list: '/students',
+                create: '/students/create',
+                edit: '/students/edit/:id',
+                show: '/students/show/:id',
+                meta: { label: 'الطلاب', icon: '👩‍🎓' }
+              },
+              {
+                name: 'sessions',
+                list: '/sessions',
+                create: '/sessions/create',
+                edit: '/sessions/edit/:id',
+                show: '/sessions/show/:id',
+                meta: { label: 'الجلسات', icon: '📅' }
+              },
+              {
+                name: 'payments',
+                list: '/payments',
+                create: '/payments/create',
+                edit: '/payments/edit/:id',
+                meta: { label: 'المدفوعات', icon: '💰' }
+              },
+              {
+                name: 'invoices',
+                list: '/invoices',
+                create: '/invoices/create',
+                show: '/invoices/show/:id',
+                meta: { label: 'الفواتير', icon: '🧾' }
+              },
+              {
+                name: 'payroll',
+                list: '/payroll',
+                create: '/payroll/create',
+                meta: { label: 'رواتب المعلمين', icon: '💳' }
+              },
+            ]}
+            options={{ syncWithLocation: true, warnWhenUnsavedChanges: true }}
+          >
+            <Routes>
+              <Route
+                element={
+                  <Authenticated key="authenticated-inner" fallback={<CatchAllNavigate to="/login" />}>
+                    <ThemedLayoutV2 Sider={() => <ThemedSiderV2 Title={() => <span style={{fontWeight:'bold',fontSize:16}}>أكاديمية الفجر</span>} />}>
+                      <Outlet />
+                    </ThemedLayoutV2>
+                  </Authenticated>
+                }
+              >
+                <Route index element={<NavigateToResource resource="teachers" />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/teachers">
+                  <Route index element={<TeacherList />} />
+                  <Route path="create" element={<TeacherCreate />} />
+                  <Route path="edit/:id" element={<TeacherEdit />} />
+                  <Route path="show/:id" element={<TeacherShow />} />
+                </Route>
+                <Route path="/students">
+                  <Route index element={<StudentList />} />
+                  <Route path="create" element={<StudentCreate />} />
+                  <Route path="edit/:id" element={<StudentEdit />} />
+                  <Route path="show/:id" element={<StudentShow />} />
+                </Route>
+                <Route path="/sessions">
+                  <Route index element={<SessionList />} />
+                  <Route path="create" element={<SessionCreate />} />
+                  <Route path="edit/:id" element={<SessionEdit />} />
+                  <Route path="show/:id" element={<SessionShow />} />
+                </Route>
+                <Route path="/payments">
+                  <Route index element={<PaymentList />} />
+                  <Route path="create" element={<PaymentCreate />} />
+                  <Route path="edit/:id" element={<PaymentEdit />} />
+                </Route>
+                <Route path="/invoices">
+                  <Route index element={<InvoiceList />} />
+                  <Route path="create" element={<InvoiceCreate />} />
+                  <Route path="show/:id" element={<InvoiceShow />} />
+                </Route>
+                <Route path="/payroll">
+                  <Route index element={<PayrollList />} />
+                  <Route path="create" element={<PayrollCreate />} />
+                </Route>
+              </Route>
+              <Route
+                element={
+                  <Authenticated key="authenticated-outer" fallback={<Outlet />}>
+                    <NavigateToResource />
+                  </Authenticated>
+                }
+              >
+                <Route path="/login" element={<AuthPage type="login" title={<div style={{textAlign:'center',padding:'16px 0'}}><h2 style={{color:'#1677ff',margin:0}}>أكاديمية الفجر</h2><p style={{color:'#888',margin:'4px 0 0'}}>دخول لوحة التحكم</p></div>} />} />
+              </Route>
+              <Route path="*" element={<ErrorComponent />} />
+            </Routes>
+            <UnsavedChangesNotifier />
+            <DocumentTitleHandler />
+          </Refine>
+        </AntdApp>
+      </ConfigProvider>
+    </BrowserRouter>
   )
 }
